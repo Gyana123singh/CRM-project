@@ -1,0 +1,850 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum UserRole {
+  SUPER_ADMIN   @map("super-admin")
+  CLIENT_ADMIN  @map("client-admin")
+  TEAM          @map("team")
+}
+
+enum CompanyStatus {
+  ACTIVE      @map("active")
+  SUSPENDED   @map("suspended")
+}
+
+enum PlanType {
+  STARTER_PLAN  @map("Starter Plan")
+  GROWTH_PLAN   @map("Growth Plan")
+  PREMIUM_PLAN  @map("Premium Plan")
+}
+
+enum AgentStatus {
+  ONLINE  @map("online")
+  BUSY    @map("busy")
+  OFFLINE @map("offline")
+}
+
+enum LeadSource {
+  WEBSITE_FORMS   @map("Website Forms")
+  LANDING_PAGES   @map("Landing Pages")
+  META_ADS        @map("Meta Ads")
+  GOOGLE_ADS      @map("Google Ads")
+  WHATSAPP        @map("WhatsApp")
+  MANUAL_ENTRY    @map("Manual Entry")
+}
+
+enum LeadStatus {
+  NEW             @map("New")
+  CONTACTED       @map("Contacted")
+  INTERESTED      @map("Interested")
+  FOLLOW_UP       @map("Follow-up")
+  CONVERTED       @map("Converted")
+  LOST            @map("Lost")
+  NOT_REACHABLE   @map("Not Reachable")
+}
+
+enum SenderType {
+  CUSTOMER @map("customer")
+  AGENT    @map("agent")
+  BOT      @map("bot")
+}
+
+enum MessageChannel {
+  WHATSAPP @map("WhatsApp")
+  WEB      @map("Web")
+  SMS      @map("SMS")
+}
+
+enum RuleTrigger {
+  NEW_LEAD_CREATED    @map("New Lead Created")
+  STATUS_UPDATED      @map("Status Updated")
+  NO_CUSTOMER_RESPONSE @map("No Customer Response")
+}
+
+enum RuleStatus {
+  ACTIVE @map("active")
+  PAUSED @map("paused")
+}
+
+enum AppointmentStatus {
+  CONFIRMED @map("confirmed")
+  PENDING   @map("pending")
+  CANCELLED @map("cancelled")
+}
+
+enum TemplateCategory {
+  UTILITY        @map("utility")
+  MARKETING      @map("marketing")
+  AUTHENTICATION @map("authentication")
+}
+
+enum TemplateStatus {
+  APPROVED @map("approved")
+  PENDING   @map("pending")
+  REJECTED @map("rejected")
+}
+
+enum LogCategory {
+  SECURITY  @map("Security")
+  BILLING   @map("Billing")
+  TENANTS   @map("Tenants")
+  AI_ENGINE @map("AI Engine")
+}
+
+// ==========================================
+// MODELS
+// ==========================================
+
+model Company {
+  id            String        @id @default(uuid())
+  companyName   String
+  industry      String
+  contactPerson String
+  phone         String?
+  email         String        @unique
+  address       String?
+  plan          String        @default("Starter Plan")
+  status        CompanyStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Tenant Configurations
+  routingPolicy String        @default("round-robin") // "round-robin" or "load-balanced"
+  whatsappPhone String?
+  whatsappName  String?
+  whatsappConnected Boolean   @default(false)
+  
+  // Custom SMTP
+  smtpHost       String?
+  smtpPort       String?
+  smtpUser       String?
+  smtpPass       String?
+  smtpEncryption String?      @default("SSL/TLS")
+  smtpVerified   Boolean      @default(false)
+
+  // AI Configurations
+  botPersona     String       @default("You are a professional, polite, and helpful AI assistant...")
+  botModel       String       @default("Google Gemini 1.5 Pro")
+  botTemperature Float        @default(0.5)
+  botAutoPilot   Boolean      @default(true)
+
+  // Relations
+  users            User[]
+  leads            Lead[]
+  knowledgeBase    KnowledgeBase[]
+  rules            AutomationRule[]
+  whatsappTemplates WhatsAppTemplate[]
+  invoices         Invoice[]
+  subscriptions    Subscription[]
+  appointments     Appointment[]
+  appointmentSlots AppointmentSlotConfig[]
+  appointmentServices AppointmentServiceConfig[]
+  
+  // WhatsApp Campaign Relations
+  whatsappContacts  WhatsappContact[]
+  whatsappGroups    WhatsappContactGroup[]
+  whatsappCampaigns WhatsappCampaign[]
+  whatsappAccount   WhatsAppAccount?
+  
+  // Lead Discovery, Enrichment, Auditing, Verification
+  credits           Int               @default(1000)
+  audits            Audit[]
+  leadBatches       LeadBatch[]
+  enrichmentBatches EnrichmentBatch[]
+  emailValidations  EmailValidation[]
+  outreachDrafts    OutreachDraft[]
+
+  @@map("companies")
+}
+
+model User {
+  id          String   @id @default(uuid())
+  name        String
+  email       String   @unique
+  phone       String?
+  password    String   // Hashed password
+  role        UserRole
+  status      String   @default("active") // "active" | "inactive" | "suspended"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  companyId   String?
+  company     Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  agentProfile AgentProfile?
+  assignedLeads Lead[]  @relation("AssignedLeads")
+  searchHistories SearchHistory[]
+  savedLeads      SavedLead[]
+  leadLists       LeadList[]
+
+  @@map("users")
+}
+
+model AgentProfile {
+  id             String      @id @default(uuid())
+  userId         String      @unique
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone          String
+  status         AgentStatus @default(OFFLINE)
+  specialty      String      @default("General Support Desk")
+  isActive       Boolean     @default(true)
+  joinedDate     DateTime    @default(now())
+  
+  // Analytics Cache
+  leadsCount     Int         @default(0)
+  conversionRate Float       @default(0.0)
+
+  // New Profile Fields
+  fatherName     String?
+  address        String?
+  profileImage   String?
+
+  @@map("agent_profiles")
+}
+
+model Lead {
+  id              String         @id @default(uuid())
+  name            String
+  phone           String
+  email           String?
+  location        String?
+  serviceInterest String
+  message         String?
+  source          LeadSource     @default(MANUAL_ENTRY)
+  status          LeadStatus     @default(NEW)
+  followUpDate    DateTime?
+  notes           String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // Find & Detect info
+  cms             String?        // Detected CMS/platform
+  leadBatchId     String?
+  leadBatch       LeadBatch?     @relation(fields: [leadBatchId], references: [id], onDelete: SetNull)
+
+  // Relations
+  companyId       String
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assignedToId    String?
+  assignedTo      User?          @relation("AssignedLeads", fields: [assignedToId], references: [id], onDelete: SetNull)
+  chatThread      ChatThread?
+  appointments    Appointment[]
+
+  @@map("leads")
+}
+
+model ChatThread {
+  id           String    @id @default(uuid())
+  leadId       String    @unique
+  lead         Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  aiAutoReply  Boolean   @default(true)
+  status       String    @default("active") // "active" or "archived"
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  messages     Message[]
+
+  @@map("chat_threads")
+}
+
+model Message {
+  id           String         @id @default(uuid())
+  threadId     String
+  thread       ChatThread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender       SenderType
+  text         String         @db.Text
+  aiResponse   String?        @db.Text
+  channel      MessageChannel @default(WHATSAPP)
+  timestamp    DateTime       @default(now())
+
+  @@map("messages")
+}
+
+model AutomationRule {
+  id          String      @id @default(uuid())
+  companyId   String
+  company     Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  trigger     RuleTrigger
+  condition   String?     // e.g., "Source is Meta Ads"
+  actions     String[]    // Array of stringified action items
+  delay       String      @default("Instant") // e.g. "Instant", "24 Hours"
+  status      RuleStatus  @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+
+  @@map("automation_rules")
+}
+
+model Appointment {
+  id              String            @id @default(uuid())
+  leadId          String?
+  lead            Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  companyId       String
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerName    String
+  phone           String
+  email           String?
+  notes           String?           @db.Text
+  appointmentDate DateTime
+  appointmentTime String            // e.g. "11:30 AM"
+  service         String
+  status          AppointmentStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+
+  @@map("appointments")
+}
+
+model AppointmentSlotConfig {
+  id        String   @id @default(uuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  slotDate  DateTime
+  slotTimes String[] // e.g. ["10:00 AM", "11:00 AM", "12:00 PM"]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, slotDate])
+  @@map("appointment_slot_configs")
+}
+
+model AppointmentServiceConfig {
+  id        String   @id @default(uuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, name])
+  @@map("appointment_service_configs")
+}
+
+model KnowledgeBase {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  title       String
+  content     String?  @db.Text
+  category    String   // FAQs, services, products, pricing, policies, overview
+  fileUrl     String?
+  createdAt   DateTime @default(now())
+
+  @@map("knowledge_base")
+}
+
+model WhatsAppTemplate {
+  id          String           @id @default(uuid())
+  companyId   String
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  category    TemplateCategory @default(MARKETING)
+  language    String           @default("en_US")
+  status      TemplateStatus   @default(PENDING)
+  bodyText    String           @db.Text
+  createdAt   DateTime         @default(now())
+
+  campaigns   WhatsappCampaign[]
+
+  @@map("whatsapp_templates")
+}
+
+model Invoice {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoiceNo   String   @unique
+  date        DateTime
+  amount      String   // e.g. "₹15,000"
+  status      String   // "paid" | "pending" | "failed"
+  plan        String   // "Growth Plan - Monthly"
+  createdAt   DateTime @default(now())
+
+  @@map("invoices")
+}
+
+model Subscription {
+  id            String   @id @default(uuid())
+  companyId     String
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planName      String   // Starter, Growth, Premium
+  amount        Float
+  startDate     DateTime
+  endDate       DateTime
+  paymentStatus String   // paid, pending, failed
+  createdAt     DateTime @default(now())
+
+  @@map("subscriptions")
+}
+
+model AuditLog {
+  id          String      @id @default(uuid())
+  timestamp   DateTime    @default(now())
+  category    LogCategory
+  event       String      @db.Text
+  user        String
+  ip          String
+
+  @@map("audit_logs")
+}
+
+model SystemPlanConfig {
+  id           String   @id @default(uuid())
+  name         String   @unique // Starter, Growth, Premium
+  priceMonthly Float
+  maxChannels  Int
+  maxSeats     Int
+  maxTokens    Int
+  updatedAt    DateTime @updatedAt
+
+  @@map("system_plan_configs")
+}
+
+model GlobalConfig {
+  id                String   @id @default("singleton")
+  maintenanceMode   Boolean  @default(false)
+  allowRegistration Boolean  @default(true)
+  globalRateLimit   Int      @default(100)
+  updatedAt         DateTime @updatedAt
+
+  @@map("global_configs")
+}
+
+model Audit {
+  id                    String              @id @default(uuid())
+  companyId             String
+  company               Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  type                  String              // "seo" | "social" | "gmb"
+  target                String              // e.g. domain, handle, or Google listing link
+  score                 Int                 @default(0)
+  status                String              @default("completed") // "pending" | "completed" | "failed"
+  pdfUrl                String?
+  seoAuditId            String?             @unique
+  seoAudit              SeoAudit?           @relation(fields: [seoAuditId], references: [id], onDelete: Cascade)
+  socialAuditId         String?             @unique
+  socialAudit           SocialAudit?        @relation(fields: [socialAuditId], references: [id], onDelete: Cascade)
+  googleBusinessAuditId String?             @unique
+  googleBusinessAudit   GoogleBusinessAudit? @relation(fields: [googleBusinessAuditId], references: [id], onDelete: Cascade)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@map("audits")
+}
+
+model SeoAudit {
+  id                String   @id @default(uuid())
+  url               String
+  ssl               Boolean  @default(false)
+  https             Boolean  @default(false)
+  mobileResponsive  Boolean  @default(false)
+  contactInfo       Json?    // { email, phone, etc. }
+  ctaPresence       Boolean  @default(false)
+  metaTitle         String?
+  metaDescription   String?
+  headings          Json?    // H1 to H6 structure
+  robotsTxt         Boolean  @default(false)
+  sitemapXml        Boolean  @default(false)
+  canonicalTags     Boolean  @default(false)
+  indexability      Boolean  @default(false)
+  imageAltTags      Json?    // Image alt attributes summary
+  localSEO          Json?    // local structured data indicators
+  executiveSummary  String?  @db.Text
+  priorityActions   Json?    // Array of string/details
+  criticalFindings  Json?
+  highFindings      Json?
+  mediumFindings    Json?
+  goodFindings      Json?
+  quickWins         Json?
+  audit             Audit?
+
+  @@map("seo_audits")
+}
+
+model SocialAudit {
+  id                  String   @id @default(uuid())
+  platform            String   // "instagram" | "facebook" | "linkedin" | "twitter"
+  profileUrl          String
+  accountType         String   // "public" | "my-account"
+  screenshotUrl       String?
+  profileScore        Int      @default(0)
+  brandingAnalysis    String?  @db.Text
+  engagementAnalysis  String?  @db.Text
+  growthOpportunities Json?
+  recommendations     Json?
+  contentPlan         Json?    // 30-day plan
+  audit               Audit?
+
+  @@map("social_audits")
+}
+
+model GoogleBusinessAudit {
+  id                 String   @id @default(uuid())
+  listingUrl         String
+  profileExistence   Boolean  @default(false)
+  completeness       Int      @default(0)
+  reviews            Json?    // reviews summary
+  ratings            Float    @default(0.0)
+  localVisibility    Int      @default(0) // percentage/score
+  localSEOReadiness  Int      @default(0) // score
+  recommendations    Json?
+  audit              Audit?
+
+  @@map("google_business_audits")
+}
+
+model LeadBatch {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  niche       String
+  region      String
+  platform    String
+  count       Int      @default(0)
+  leads       Lead[]
+  createdAt   DateTime @default(now())
+
+  @@map("lead_batches")
+}
+
+model EnrichmentBatch {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  leadBatchId String?
+  contacts    Contact[]
+  createdAt   DateTime @default(now())
+
+  @@map("enrichment_batches")
+}
+
+model Contact {
+  id                String   @id @default(uuid())
+  enrichmentBatchId String
+  enrichmentBatch   EnrichmentBatch @relation(fields: [enrichmentBatchId], references: [id], onDelete: Cascade)
+  businessName      String?
+  websiteUrl        String?
+  name              String?
+  role              String?
+  email             String?
+  phone             String?
+  whatsapp          String?
+  linkedin          String?
+  socialProfiles    Json?
+  createdAt         DateTime @default(now())
+
+  @@map("contacts")
+}
+
+model EmailValidation {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email       String
+  syntaxValid Boolean  @default(false)
+  mxCheck     Boolean  @default(false)
+  smtpValid   Boolean  @default(false)
+  disposable  Boolean  @default(false)
+  duplicate   Boolean  @default(false)
+  catchAll    Boolean  @default(false)
+  status      String   // "valid" | "invalid" | "risky" | "catch-all"
+  createdAt   DateTime @default(now())
+
+  @@map("email_validations")
+}
+
+model OutreachDraft {
+  id          String   @id @default(uuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contactId   String?
+  mode        String   // "enriched-contacts" | "social-reply"
+  channel     String   // "email" | "whatsapp" | "linkedin" | "facebook" | "instagram" | "twitter"
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@map("outreach_drafts")
+}
+
+// ==========================================
+// WHATSAPP CAMPAIGN MANAGEMENT MODELS
+// ==========================================
+
+enum WhatsappCampaignStatus {
+  DRAFT      @map("Draft")
+  SCHEDULED  @map("Scheduled")
+  RUNNING    @map("Running")
+  COMPLETED  @map("Completed")
+  FAILED     @map("Failed")
+}
+
+enum WhatsappMessageStatus {
+  QUEUED     @map("Queued")
+  SENT       @map("Sent")
+  DELIVERED  @map("Delivered")
+  READ       @map("Read")
+  FAILED     @map("Failed")
+}
+
+model WhatsappContact {
+  id          String          @id @default(uuid())
+  firstName   String
+  lastName    String?
+  mobile      String
+  email       String?
+  countryCode String          @default("91")
+  tags        String[]        @default([])
+  notes       String?         @db.Text
+  status      String          @default("active") // "active" | "inactive"
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Relationships
+  groups      WhatsappContactGroup[] @relation("GroupContacts")
+  logs        WhatsappMessageLog[]
+
+  @@unique([companyId, mobile])
+  @@map("whatsapp_contacts")
+}
+
+model WhatsappContactGroup {
+  id          String          @id @default(uuid())
+  name        String
+  description String?
+  isDynamic   Boolean         @default(false)
+  dynamicRules Json?          // If isDynamic is true, store conditions for tags/location/etc.
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  companyId   String
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Relationships
+  contacts    WhatsappContact[] @relation("GroupContacts")
+  campaigns   WhatsappCampaign[] @relation("CampaignGroups")
+
+  @@map("whatsapp_contact_groups")
+}
+
+model WhatsappCampaign {
+  id            String                 @id @default(uuid())
+  name          String
+  status        WhatsappCampaignStatus @default(DRAFT)
+  scheduledTime DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  companyId     String
+  company       Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  templateId    String
+  template      WhatsAppTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  // Relationships
+  audiences     WhatsappContactGroup[] @relation("CampaignGroups")
+  logs          WhatsappMessageLog[]
+  schedules     WhatsappCampaignSchedule[]
+
+  @@map("whatsapp_campaigns")
+}
+
+model WhatsappMessageLog {
+  id           String                @id @default(uuid())
+  messageId    String?               @unique // External ID from WhatsApp API
+  status       WhatsappMessageStatus @default(QUEUED)
+  deliveredAt  DateTime?
+  readAt       DateTime?
+  failedReason String?               @db.Text
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  campaignId   String
+  campaign     WhatsappCampaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      WhatsappContact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_message_logs")
+}
+
+model WhatsappCampaignSchedule {
+  id            String           @id @default(uuid())
+  scheduledTime DateTime
+  status        String           @default("pending") // "pending" | "executed" | "cancelled"
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  campaignId    String
+  campaign      WhatsappCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_campaign_schedules")
+}
+
+model WhatsAppAccount {
+  id          String   @id @default(uuid())
+  phone       String
+  name        String
+  provider    String   @default("Cloud API")
+  apiKey      String?
+  accessToken String?
+  status      String   @default("disconnected")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  companyId   String   @unique
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_accounts")
+}
+
+// ==========================================
+// BUSINESS LEAD FINDER & CACHING MODELS
+// ==========================================
+
+model SearchHistory {
+  id           String   @id @default(uuid())
+  niche        String
+  region       String
+  platform     String?
+  limit        Int
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  resultsCount Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@map("search_histories")
+}
+
+model Business {
+  id           String               @id @default(uuid())
+  placeId      String?              @unique
+  name         String
+  website      String?
+  phone        String?
+  address      String?
+  rating       Float?
+  latitude     Float?
+  longitude    Float?
+  cms          String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  contacts     BusinessContact[]
+  socialLinks  BusinessSocialLink[]
+  technologies BusinessTechnology[]
+  savedLeads   SavedLead[]
+
+  @@map("businesses")
+}
+
+model BusinessContact {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  type       String   // "email" | "phone" | "general"
+  value      String
+  name       String?
+  role       String?
+  source     String?  // e.g. "homepage", "/contact"
+  createdAt  DateTime @default(now())
+
+  @@map("business_contacts")
+}
+
+model BusinessSocialLink {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  platform   String   // "facebook" | "instagram" | "linkedin" | "twitter" | "youtube"
+  url        String
+  createdAt  DateTime @default(now())
+
+  @@map("business_social_links")
+}
+
+model Technology {
+  id           String               @id @default(uuid())
+  name         String               @unique
+  description  String?
+  category     String?
+  businesses   BusinessTechnology[]
+
+  @@map("technologies")
+}
+
+model BusinessTechnology {
+  id           String     @id @default(uuid())
+  businessId   String
+  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  technologyId String
+  technology   Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+  version      String?
+  confidence   Int?
+  createdAt    DateTime   @default(now())
+
+  @@unique([businessId, technologyId])
+  @@map("business_technologies")
+}
+
+model SavedLead {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  leadListId String?
+  leadList   LeadList? @relation(fields: [leadListId], references: [id], onDelete: SetNull)
+  notes      String?   @db.Text
+  createdAt  DateTime  @default(now())
+
+  @@unique([userId, businessId])
+  @@map("saved_leads")
+}
+
+model LeadList {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedLeads  SavedLead[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("lead_lists")
+}
+
+model ApiLog {
+  id           String   @id @default(uuid())
+  endpoint     String
+  method       String
+  requestBody  String?  @db.Text
+  responseBody String?  @db.Text
+  statusCode   Int
+  duration     Int
+  ip           String?
+  userId       String?
+  createdAt    DateTime @default(now())
+
+  @@map("api_logs")
+}
+
+model SearchCache {
+  id        String   @id @default(uuid())
+  queryKey  String   @unique
+  results   Json
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("search_caches")
+}
