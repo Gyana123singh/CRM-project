@@ -37,7 +37,7 @@ interface TenantCompany {
   status: "active" | "suspended";
   leadsCount: number;
   createdDate: string;
-  credits: number;
+  credits?: number;
   logoColor?: string;
   logoType?: "hexagon" | "zap" | "atom" | "leaf" | "compass";
   logo?: string;
@@ -55,6 +55,7 @@ const MOCK_COMPANIES: TenantCompany[] = [
     status: "active",
     leadsCount: 148,
     createdDate: "12 Sep 2024",
+    credits: 1000,
     logoColor: "bg-purple-100 text-purple-600 border-purple-200 dark:bg-purple-950/40 dark:border-purple-800",
     logoType: "hexagon",
   },

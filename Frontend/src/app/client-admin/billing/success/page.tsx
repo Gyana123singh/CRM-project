@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import DashboardWrapper from "@/components/shared/DashboardWrapper";
 import { CheckCircle, ArrowRight, FileText, Sparkles } from "lucide-react";
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -93,5 +93,27 @@ export default function PaymentSuccessPage() {
         </div>
       </div>
     </DashboardWrapper>
+  );
+}
+
+function PaymentSuccessFallback() {
+  return (
+    <DashboardWrapper>
+      <div className="max-w-2xl mx-auto py-12 px-4 text-center">
+        <div className="animate-pulse space-y-4 p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800">
+          <div className="h-16 w-16 bg-slate-200 dark:bg-slate-800 rounded-full mx-auto" />
+          <div className="h-6 bg-slate-200 dark:bg-slate-800 rounded-lg w-48 mx-auto" />
+          <div className="h-24 bg-slate-200 dark:bg-slate-800 rounded-2xl w-full" />
+        </div>
+      </div>
+    </DashboardWrapper>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={<PaymentSuccessFallback />}>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }
