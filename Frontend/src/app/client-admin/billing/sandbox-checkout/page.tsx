@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import axios from "axios";
 import { CreditCard, ShieldCheck, ArrowLeft, Loader2, Lock, CheckCircle2 } from "lucide-react";
 import { toast } from "react-toastify";
 
-export default function SandboxCheckoutPage() {
+function SandboxCheckoutContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -262,5 +262,24 @@ export default function SandboxCheckoutPage() {
 
       </div>
     </div>
+  );
+}
+
+function SandboxCheckoutFallback() {
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-wider">
+        <Loader2 className="h-5 w-5 text-orange-500 animate-spin" />
+        Loading Sandbox Checkout...
+      </div>
+    </div>
+  );
+}
+
+export default function SandboxCheckoutPage() {
+  return (
+    <Suspense fallback={<SandboxCheckoutFallback />}>
+      <SandboxCheckoutContent />
+    </Suspense>
   );
 }
