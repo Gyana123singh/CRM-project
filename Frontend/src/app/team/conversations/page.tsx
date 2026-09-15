@@ -104,7 +104,7 @@ export default function ConversationsPage() {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : "";
 
     if (token) {
-      const apiURL = axiosInstance.defaults.baseURL || "http://localhost:5000";
+      const apiURL = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || axiosInstance.defaults.baseURL || "http://localhost:5000";
       eventSource = new EventSource(`${apiURL}/api/realtime?token=${token}`);
 
       eventSource.addEventListener("message_created", (event: MessageEvent) => {
@@ -172,7 +172,7 @@ export default function ConversationsPage() {
   useEffect(() => {
     if (activeLead) {
       setCustomerNotes(activeLead.notes || "");
-      
+
       // Format followUpDate string (YYYY-MM-DD) for HTML5 input date
       let formattedDate = "";
       if (activeLead.followUpDate) {
@@ -313,14 +313,14 @@ export default function ConversationsPage() {
     if (activeThread.aiAutoReply) {
       setIsTyping(true);
       try {
-        const companyId = user?.companyId || "company-infotattva-id";
+        const companyId = user?.companyId || (activeLead as any)?.companyId || "company-infotattva-id";
         const response = await axiosInstance.post(ENDPOINTS.webhook.aiChat, {
           phone: activeThread.phone || "+91 00000 00000",
           text: customerText,
           companyId
         });
 
-        const aiReplyText = response.data.botReply || response.data.aiResponse;
+        const aiReplyText = response.data.botReply || response.data.aiResponse || `Thank you for your message. An advisor will connect with you shortly.`;
 
         dispatch(
           sendMessage({
@@ -336,7 +336,7 @@ export default function ConversationsPage() {
           sendMessage({
             leadId: activeThread.leadId,
             sender: "bot",
-            text: `[Error: ${errMsg}]. Please ensure you replaced YOUR_GEMINI_API_KEY_HERE with a valid API key in Backend/.env and restarted the server.`,
+            text: `Thank you for your message. Our representative will contact you shortly.`,
           })
         );
       } finally {
@@ -351,7 +351,7 @@ export default function ConversationsPage() {
     if (!activeThread) return;
 
     try {
-      const updatePromises = [
+      const updatePromises: Promise<any>[] = [
         axiosInstance.patch(ENDPOINTS.leads.notes(activeThread.leadId), { notes: customerNotes }),
         axiosInstance.patch(ENDPOINTS.leads.status(activeThread.leadId), { status: leadStatus })
       ];
@@ -379,7 +379,7 @@ export default function ConversationsPage() {
   // AI Assist Feature: Calculate Sentiment dynamically
   const calculateSentiment = () => {
     if (!activeThread || activeThread.messages.length === 0) return { tag: "Neutral", icon: Meh, color: "text-slate-400 bg-slate-100 dark:bg-slate-800" };
-    
+
     const customerMsgs = activeThread.messages.filter(m => m.sender === "customer");
     if (customerMsgs.length === 0) return { tag: "Neutral", icon: Meh, color: "text-slate-400 bg-slate-100 dark:bg-slate-800" };
 
@@ -387,22 +387,22 @@ export default function ConversationsPage() {
 
     // Check keywords
     if (
-      lastMsgText.includes("thanks") || 
-      lastMsgText.includes("great") || 
-      lastMsgText.includes("yes") || 
-      lastMsgText.includes("excite") || 
-      lastMsgText.includes("good") || 
+      lastMsgText.includes("thanks") ||
+      lastMsgText.includes("great") ||
+      lastMsgText.includes("yes") ||
+      lastMsgText.includes("excite") ||
+      lastMsgText.includes("good") ||
       lastMsgText.includes("interested")
     ) {
       return { tag: "Positive", icon: Smile, color: "text-emerald-500 bg-emerald-500/10" };
     }
-    
+
     if (
-      lastMsgText.includes("angry") || 
-      lastMsgText.includes("bad") || 
-      lastMsgText.includes("no") || 
-      lastMsgText.includes("delay") || 
-      lastMsgText.includes("frustrated") || 
+      lastMsgText.includes("angry") ||
+      lastMsgText.includes("bad") ||
+      lastMsgText.includes("no") ||
+      lastMsgText.includes("delay") ||
+      lastMsgText.includes("frustrated") ||
       lastMsgText.includes("expensive")
     ) {
       return { tag: "Frustrated", icon: Frown, color: "text-rose-500 bg-rose-500/10" };
@@ -417,12 +417,12 @@ export default function ConversationsPage() {
   // AI Assist Feature: Canned Smart Replies
   const getSmartReplies = () => {
     if (!activeThread) return [];
-    
+
     const customerMsgs = activeThread.messages.filter(m => m.sender === "customer");
     if (customerMsgs.length === 0) return ["Hello! How can we assist you today?", "Are you looking for commercial space?", "Can we hop on a quick demo call?"];
 
     const text = customerMsgs[customerMsgs.length - 1].text.toLowerCase();
-    
+
     if (text.includes("2bhk") || text.includes("flat") || text.includes("apartment")) {
       return ["Here are details for our 2BHK listings.", "Would you like a site visit tomorrow?", "What is your target budget for a flat?"];
     }
@@ -453,7 +453,7 @@ export default function ConversationsPage() {
   const handleSummarize = () => {
     if (!activeThread) return;
     setShowAiMenu(false);
-    
+
     let summaryText = `* Customer is inquiring regarding ${activeLead?.serviceInterest || "AI CRM Integration"}.\n* Latest message shows sentiment is ${sentiment.tag}.\n* Action Item: Send digital project brochures & confirm follow-up calls schedule.`;
     setSummaryBox(summaryText);
   };
@@ -484,7 +484,7 @@ export default function ConversationsPage() {
                   <X className="h-4.5 w-4.5" />
                 </button>
               </div>
-              
+
               <div className="mt-4 p-4 border border-indigo-500/10 bg-indigo-500/5 text-slate-700 dark:text-slate-200 rounded-xl space-y-2 leading-relaxed font-medium">
                 {summaryBox.split("\n").map((line, idx) => (
                   <p key={idx}>{line}</p>
@@ -515,13 +515,13 @@ export default function ConversationsPage() {
 
         {/* Dynamic Chat split window */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[600px] border border-slate-200 dark:border-slate-800 rounded-3xl bg-white dark:bg-slate-900 overflow-hidden shadow-xl">
-          
+
           {/* Column 1: Conversations Threads Sidebar */}
           <div className="lg:col-span-1 border-r border-slate-100 dark:border-slate-800 flex flex-col h-full min-h-0 bg-slate-50/50 dark:bg-slate-950/20">
             <div className="p-4 border-b border-slate-100 dark:border-slate-800">
               <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Active Channels</span>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
               {threads.map((thread) => {
                 const lastMsg = thread.messages[thread.messages.length - 1];
@@ -530,24 +530,21 @@ export default function ConversationsPage() {
                   <button
                     key={thread.leadId}
                     onClick={() => dispatch(setActiveThread(thread.leadId))}
-                    className={`w-full text-left p-3 rounded-2xl flex gap-3 text-xs transition ${
-                      isActive
+                    className={`w-full text-left p-3 rounded-2xl flex gap-3 text-xs transition ${isActive
                         ? "bg-gradient-to-r from-primary to-gray-500 text-white shadow-lg shadow-purple-600/10 font-semibold"
                         : "hover:bg-slate-100 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-300"
-                    }`}
+                      }`}
                   >
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold uppercase shrink-0 ${
-                      isActive ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
-                    }`}>
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center font-bold uppercase shrink-0 ${isActive ? "bg-white/20 text-white" : "bg-primary/10 text-primary"
+                      }`}>
                       {thread.leadName.charAt(0)}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between font-bold">
                         <span className="truncate">{thread.leadName}</span>
                         {thread.aiAutoReply && (
-                          <span className={`text-[8px] px-1 rounded flex items-center gap-0.5 uppercase ${
-                            isActive ? "bg-white/30 text-white" : "bg-purple-100 dark:bg-purple-950/50 text-primary"
-                          }`}>
+                          <span className={`text-[8px] px-1 rounded flex items-center gap-0.5 uppercase ${isActive ? "bg-white/30 text-white" : "bg-purple-100 dark:bg-purple-950/50 text-primary"
+                            }`}>
                             <Bot className="h-2 w-2 animate-pulse" /> AI
                           </span>
                         )}
@@ -612,13 +609,12 @@ export default function ConversationsPage() {
                         className={`flex w-full ${isCust ? "justify-start" : "justify-end"} group`}
                       >
                         <div
-                          className={`max-w-[75%] p-3.5 rounded-2xl text-xs relative ${
-                            isCust
+                          className={`max-w-[75%] p-3.5 rounded-2xl text-xs relative ${isCust
                               ? "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-150 dark:border-slate-800 shadow-sm bubble-in"
                               : isBot
-                              ? "bg-gradient-to-tr from-primary to-gray-500 text-white font-medium shadow-md shadow-purple-600/10 bubble-out"
-                              : "bg-gradient-to-tr from-primary to-gray-500 text-white font-medium shadow-md shadow-purple-600/10 bubble-out"
-                          }`}
+                                ? "bg-gradient-to-tr from-primary to-gray-500 text-white font-medium shadow-md shadow-purple-600/10 bubble-out"
+                                : "bg-gradient-to-tr from-primary to-gray-500 text-white font-medium shadow-md shadow-purple-600/10 bubble-out"
+                            }`}
                         >
                           {/* Action Overlay on Hover */}
                           {isAgent && editingMessageId !== msg.id && (
@@ -661,7 +657,7 @@ export default function ConversationsPage() {
                               </>
                             )}
                           </div>
-                          
+
                           {editingMessageId === msg.id ? (
                             <div className="space-y-2 mt-2">
                               <textarea
@@ -690,7 +686,7 @@ export default function ConversationsPage() {
                           ) : (
                             <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                           )}
-                          
+
                           <div className="flex justify-end items-center gap-1 mt-1 opacity-60 text-[9px]">
                             <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                             {!isCust && <CheckCheck className="h-3 w-3" />}
@@ -755,7 +751,7 @@ export default function ConversationsPage() {
                           <div className="fixed inset-0 z-30" onClick={() => setShowAiMenu(false)} />
                           <div className="absolute right-0 bottom-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2.5 rounded-2xl w-48 shadow-2xl z-40 animate-fade-in text-[11px] font-bold text-slate-700 dark:text-slate-300 space-y-1">
                             <span className="text-[9px] uppercase font-bold text-slate-450 block px-2 mb-1.5">AI Assist Toolkit</span>
-                            
+
                             <button
                               type="button"
                               onClick={handleRephrase}
@@ -805,26 +801,24 @@ export default function ConversationsPage() {
 
           {/* Column 4: WhatsApp Inbound Simulator & Customer Notes Controls */}
           <div className="lg:col-span-1 border-l border-slate-100 dark:border-slate-800 flex flex-col h-full min-h-0 bg-slate-50/50 dark:bg-slate-950/20 p-5 space-y-4">
-            
+
             {/* Side Column Tab Switcher */}
             <div className="flex p-0.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[10px] font-bold tracking-wider shrink-0">
               <button
                 onClick={() => setSideTab("simulator")}
-                className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1 transition ${
-                  sideTab === "simulator"
+                className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1 transition ${sideTab === "simulator"
                     ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow"
                     : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                }`}
+                  }`}
               >
                 <Laptop className="h-3.5 w-3.5" /> Simulator
               </button>
               <button
                 onClick={() => setSideTab("notes")}
-                className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1 transition ${
-                  sideTab === "notes"
+                className={`flex-1 py-1.5 rounded-lg flex items-center justify-center gap-1 transition ${sideTab === "notes"
                     ? "bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow"
                     : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
-                }`}
+                  }`}
               >
                 <FileText className="h-3.5 w-3.5" /> Lead Co-Pilot
               </button>

@@ -60,7 +60,7 @@ export default function WebsiteSEOPage() {
     let eventSource: EventSource | null = null;
     const token = localStorage.getItem("token");
     if (token) {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
       eventSource = new EventSource(`${apiBaseUrl}/api/realtime?token=${token}`);
 
       eventSource.addEventListener("audit-progress", (event) => {
