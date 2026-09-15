@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import DashboardWrapper from "@/components/shared/DashboardWrapper";
 import { CreditCard, Check, Sparkles, AlertCircle, ShieldCheck, Download, Plus, RefreshCw } from "lucide-react";
 import { toast } from "react-toastify";
@@ -83,7 +83,7 @@ const getPlanUIDetails = (plan: SystemPlan) => {
   return { badge, description, popular, features };
 };
 
-export default function BillingPage() {
+function BillingContent() {
   const searchParams = useSearchParams();
   const [mounted, setMounted] = useState(false);
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annually">("monthly");
@@ -560,6 +560,34 @@ export default function BillingPage() {
         )}
       </div>
     </DashboardWrapper>
+  );
+}
+
+function BillingFallback() {
+  return (
+    <DashboardWrapper>
+      <div className="space-y-6 animate-pulse p-6">
+        <div className="space-y-2">
+          <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-xl w-64" />
+          <div className="h-4 bg-slate-200 dark:bg-slate-800/80 rounded-lg w-96" />
+        </div>
+        <div className="h-12 bg-slate-200 dark:bg-slate-800 rounded-2xl w-full max-w-lg" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-24 bg-slate-200 dark:bg-slate-800 rounded-2xl" />
+          ))}
+        </div>
+        <div className="h-80 bg-slate-200 dark:bg-slate-800 rounded-2xl" />
+      </div>
+    </DashboardWrapper>
+  );
+}
+
+export default function BillingPage() {
+  return (
+    <Suspense fallback={<BillingFallback />}>
+      <BillingContent />
+    </Suspense>
   );
 }
 
